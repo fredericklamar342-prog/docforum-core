@@ -16,7 +16,7 @@ import { registerPatientExportSections } from './export-sections';
 import { auditRouter, adminAuditRouter, patientAuditRouter } from './modules/audit/routes';
 import { escrowEventsRouter } from './modules/payments/routes/escrow-events';
 import { requestId } from './middleware/request-id';
-import { notificationsRouter } from './modules/notifications/routes';
+import { notificationWebhooksRouter, notificationsRouter } from './modules/notifications/routes';
 import { referralsRouter } from './modules/referrals/routes';
 
 export function createApp() {
@@ -37,6 +37,7 @@ export function createApp() {
   // an X-Request-Id and audit events can be tied back to it.
   app.use(requestId);
   app.use(cors({ origin: config.corsOrigins, credentials: true }));
+  app.use('/notifications/webhooks', notificationWebhooksRouter);
   app.use(express.json());
   app.use(cookieParser());
 

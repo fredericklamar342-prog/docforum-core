@@ -29,6 +29,7 @@ Quick-reference only. Full reasoning lives in `ARCHITECTURE.md`. Full product sc
 `User` → `EmailVerificationToken` (Phase 8, issue #34 — hashed/expiring, single-use; `User.emailVerifiedAt` gates booking, consultation/referral mutations and payment mutations, never login/browsing).
 `User` → `AccessLog` (Phase 8, issue #45 — PHI read-access log: who viewed which clinical record, when; fire-and-forget writes, fail-open).
 `User` → `Notification` (Phase 6, issue #93 — typed, owner-scoped in-app inbox; payloads contain identifiers, not clinical detail).
+`Notification` → `NotificationDelivery` (provider status); `User` → `SmsConsent` + `SmsDailyQuota` (issues #95/#96).
 `LoginAttempt` (Phase 8, issue #35 — Postgres-backed login throttle buckets, one per normalised email and per client IP; counters move only via a conditional upsert).
 `PatientProfile` → `PatientExport` → `PatientExportChunk` (Phase 8, issue #40 — right-of-access export jobs + their chunked JSON bundle; each module contributes a section via its own service, registered in `src/export-sections.ts` — see ARCHITECTURE.md §3.1).
 `FacilityProfile` → `WalletLink` (payout address) ; `Prescription` or `LabOrder` → exactly one typed `PaymentIntent` FK (issue #85)
@@ -47,7 +48,7 @@ Quick-reference only. Full reasoning lives in `ARCHITECTURE.md`. Full product sc
 - `Referral.snapshotIntakeId` has no column — `IntakeForm` doesn't exist yet (issue #1); the notes half of the snapshot rule is real and enforced.
 - Polymorphic `FulfillmentRecord.order_id` is a sketch, not final — may need splitting into two tables.
 - `AuditEvent` foundation exists (Phase 8, issue #43 — ARCHITECTURE.md §4.10): append-only (DB triggers), written by `auditService.record(tx, …)` **inside the same transaction** as the change. Wired for booking (direct and referral-origin), doctor verification, payment fund/release/refund, referral accept/decline and referral admin actions (`entity_type: 'Referral'`) — **Phase 4 transitions must call it when they're built.** There is one audit table: referral actions go into it, not into a second one. Never put PHI in `metadata`.
-- No email/SMS provider integrated yet (Phase 6, issue #17) — email verification (issue #34) therefore can't deliver its link on a hosted deployment; `backend/scripts/mark-email-verified.mjs` is the interim operator path.
+- Notification delivery uses Resend (email) and Twilio (SMS) behind the channel interface (ADR 0010). The email verification sender (issue #34) remains a separate operator path via `backend/scripts/mark-email-verified.mjs` until that sender is wired.
 - One doctor = one calendar assumed; multi-facility doctors not modeled.
 
 ## Overengineering guardrails (things NOT to build yet)

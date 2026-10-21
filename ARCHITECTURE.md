@@ -303,9 +303,25 @@ The in-app inbox is owner-scoped and keyset-paginated by `(created_at, id)`.
 Payload schemas contain opaque entity identifiers only; clinical details,
 intake, consultation notes, and results must never be copied into a notification
 payload. `notify()` persists the in-app row before calling registered channel
-adapters, and adapter failures are isolated from that write. Email/SMS providers
-remain undecided until issue #17; adapters are registered behind the module's
-service interface.
+adapters, and adapter failures are isolated from that write. Resend (email) and
+Twilio (SMS) are registered behind the module's service interface (ADR 0010).
+`NotificationDelivery` stores provider status and stable error codes;
+`SmsConsent` records per-user, per-number consent/opt-out timestamps, and
+`SmsDailyQuota` atomically enforces a per-user UTC-day send cap. Email templates
+contain no clinical detail; signed provider callbacks update delivery state and
+mark bounced/complained addresses undeliverable.
+
+```
+NotificationDelivery
+  id, notification_id (FK), channel, provider, provider_message_id (nullable),
+  status (queued|sent|delivered|failed|bounced|complained|skipped),
+  error_code (nullable), created_at, updated_at
+SmsConsent
+  id, user_id (FK, unique), phone_number (unique), granted_at (nullable),
+  opted_out_at (nullable), updated_at
+SmsDailyQuota
+  user_id (FK), day (UTC date), send_count; primary key (user_id, day)
+```
 
 ### 4.9 Auth hardening state (Phase 8)
 ```
@@ -471,7 +487,7 @@ surfaces as `deleted_user`.
 2. `Referral.target_doctor_id` left nullable with no fallback assignment logic — referrals to "a specialty" with no specific doctor need a real routing rule (round robin? load-based?) or they'll pile up unassigned. **Resolved 2026-10-21 (Phase 3, issue #6 — `docs/adr/0008-referral-routing-without-target-doctor.md`):** the column stays **required** and the fallback logic now exists at creation — a specialty-only target is routed to the **least-loaded eligible doctor** (verified, holds the specialty, not the referring doctor, active account; fewest `pending`+`accepted` referrals, ties by doctor id) inside the creation transaction. Zero eligible doctors fails the call with `422 REFERRAL_NO_ELIGIBLE_TARGET` instead of writing an unowned row, so the pile-up this item predicts remains impossible. Still deliberately absent: a patient-facing "waiting for a specialist" state (it requires a nullable target), availability-aware routing (needs doctor-side availability/discovery), and a per-doctor "accepting referrals" switch — all deferred in the ADR with revisit triggers.
 3. Polymorphic `FulfillmentRecord.order_id` (§4.7) — polymorphic FKs are a known footgun for referential integrity in Postgres. Needs either two separate tables (`PrescriptionFulfillment`, `LabOrderFulfillment`) or a check-constraint + application-level guard. **Current schema sketch is a simplification that should be revisited before implementation**, not treated as final.
 4. JWT refresh rotation without a revocation list — a stolen refresh token has no clean kill switch until this is added.
-5. **Discovered 2026-10-15 while building email verification (Phase 8, issue #34):** the email/SMS provider is still undecided (Phase 6, issue #17), so verification links can't actually be delivered in a hosted environment yet — `backend/src/modules/auth/services/email-dispatcher.ts` is a no-op seam until a provider is integrated. Until then `backend/scripts/mark-email-verified.mjs` is the documented out-of-band path for an operator with DB access. Not a reason to skip the guard: the guard is what makes the flow safe once delivery exists, and shipping it locked-off would just mean shipping it untested.
+5. **Email verification delivery remains a follow-up to issue #34:** Resend is now selected and integrated for notification email (ADR 0010), but `backend/src/modules/auth/services/email-dispatcher.ts` remains a no-op seam. Until that auth-specific sender is wired, `backend/scripts/mark-email-verified.mjs` is the documented out-of-band path for an operator with DB access.
 
 ### 6.2 What edge cases are we missing (architecture-level)?
 1. What happens to `AvailabilitySlot.status = 'held'` if a booking transaction fails/times out mid-flight — is there a TTL to release the hold? (Needed or slots leak into permanent limbo.)
@@ -501,5 +517,9 @@ surfaces as `deleted_user`.
   see `docs/adr/0003-render-preview-deployment.md`. Explicitly not this
   decision: no secrets manager, no backups, disposable data, 30-day
   free-tier DB expiry.
+- Email/SMS provider choice is resolved: Resend for email and Twilio for SMS
+  behind the notification channel interface (ADR 0010). Credentials, sender
+  identities, webhook URLs, and deployment-specific provider configuration
+  remain environment settings.
 - Video/voice provider — undecided, PRD OQ-1 must resolve first.
 - Multi-region / i18n — not designed for, not blocked either.

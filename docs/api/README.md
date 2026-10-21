@@ -42,10 +42,9 @@ That guard reads the database rather than trusting a claim in the access
 token, so verifying in one tab unblocks the caller immediately instead of
 after the 15-minute token TTL.
 
-**No email provider is integrated yet** (Phase 6, issue #17) —
-`backend/src/modules/auth/services/email-dispatcher.ts` is the
-provider-agnostic seam and currently drops the message (logging only the
-subject and recipient, never the body/token). On a hosted deployment, an
+Resend is integrated for notification email (Phase 6, ADR 0010), but
+`backend/src/modules/auth/services/email-dispatcher.ts` remains a separate
+no-op seam for verification links (issue #34). On a hosted deployment, an
 operator can mark an address verified out-of-band with
 `node backend/scripts/mark-email-verified.mjs <email>`; see
 `scripts/README.md`. This is a documented interim, not the end state.
@@ -345,8 +344,29 @@ scoped to the authenticated user; another user's notification id returns `404`.
 
 Notification payloads are validated against the typed catalogue and contain
 opaque entity identifiers only, never clinical details. Registered email/SMS
-adapter failures do not fail the persisted in-app notification. Provider
-integration and callbacks remain pending the provider decision in issue #17.
+adapter failures do not fail the persisted in-app notification. Email templates
+are generic sign-in prompts; bounces and complaints mark an address
+undeliverable. SMS is sent only to the user's current E.164 number with active
+recorded consent; STOP-family keywords opt out and START/YES/UNSTOP opt back
+in. A database-atomic quota limits SMS to five attempts per user per UTC day by
+default.
+
+Provider webhooks are public endpoints authenticated with provider signatures;
+provider URLs must exactly match the configured canonical URLs:
+
+| Method & path | Provider | Notes |
+|---|---|---|
+| `POST /notifications/webhooks/resend` | Resend | Svix-signed JSON; handles bounce and complaint events. |
+| `POST /notifications/webhooks/twilio/status` | Twilio | Signed URL-encoded delivery callbacks. |
+| `POST /notifications/webhooks/twilio/inbound` | Twilio | Signed inbound SMS; persists STOP/START consent changes. |
+
+Configure `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `EMAIL_FROM`,
+`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and exactly one of
+`TWILIO_FROM_NUMBER` / `TWILIO_MESSAGING_SERVICE_SID`. Set
+`TWILIO_STATUS_WEBHOOK_URL` and `TWILIO_INBOUND_WEBHOOK_URL` to the exact
+public URLs registered with Twilio. `SMS_DAILY_SEND_CAP` defaults to 5.
+Local development without provider credentials uses a console adapter; tests
+use fakes and never send to external providers.
 
 ## Not yet implemented
 

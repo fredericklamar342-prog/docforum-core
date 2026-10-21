@@ -6,7 +6,7 @@
 // and sessions — it calls into these services for user creation, never the
 // other way round.
 import { prisma } from '../../../db/prisma-client';
-import type { Role } from '@prisma/client';
+import { Prisma, type Role } from '@prisma/client';
 
 export function findUserById(id: string) {
   return prisma.user.findUnique({ where: { id } });
@@ -14,6 +14,57 @@ export function findUserById(id: string) {
 
 export function findUserByEmail(email: string) {
   return prisma.user.findUnique({ where: { email } });
+}
+
+export function findNotificationContact(userId: string) {
+  return prisma.user.findFirst({
+    where: { id: userId, deactivatedAt: null },
+    select: {
+      email: true,
+      phone: true,
+      emailUndeliverableAt: true,
+      smsConsent: { select: { phoneNumber: true, grantedAt: true, optedOutAt: true } },
+    },
+  });
+}
+
+export function markEmailUndeliverable(email: string, at: Date) {
+  return prisma.user.updateMany({
+    where: { email: { equals: email.trim(), mode: 'insensitive' } },
+    data: { emailUndeliverableAt: at },
+  });
+}
+
+export async function updateSmsConsent(phoneNumber: string, subscribed: boolean, at: Date) {
+  const users = await prisma.user.findMany({
+    where: { phone: phoneNumber, deactivatedAt: null },
+    select: { id: true },
+    take: 2,
+  });
+  if (users.length !== 1) return false;
+  const user = users[0]!;
+  try {
+    await prisma.smsConsent.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        phoneNumber,
+        grantedAt: subscribed ? at : null,
+        optedOutAt: subscribed ? null : at,
+      },
+      update: {
+        phoneNumber,
+        grantedAt: subscribed ? at : undefined,
+        optedOutAt: subscribed ? null : at,
+      },
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return false;
+    }
+    throw error;
+  }
 }
 
 /** Active = not deactivated. Used for the "last active admin" guard. */

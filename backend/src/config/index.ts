@@ -158,5 +158,21 @@ export const config = {
     ttlHours: Number(process.env.ADMIN_INVITE_TTL_HOURS ?? 72),
     acceptUrl: process.env.ADMIN_INVITE_ACCEPT_URL ?? 'http://localhost:5173/accept-admin-invite',
   },
+  notifications: {
+    email: {
+      resendApiKey: process.env.RESEND_API_KEY,
+      resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET,
+      from: process.env.EMAIL_FROM,
+    },
+    sms: {
+      twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+      twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
+      twilioFromNumber: process.env.TWILIO_FROM_NUMBER,
+      twilioMessagingServiceSid: process.env.TWILIO_MESSAGING_SERVICE_SID,
+      twilioInboundWebhookUrl: process.env.TWILIO_INBOUND_WEBHOOK_URL,
+      twilioStatusWebhookUrl: process.env.TWILIO_STATUS_WEBHOOK_URL,
+      dailySendCap: Number(process.env.SMS_DAILY_SEND_CAP ?? 5),
+    },
+  },
   payments: parsePaymentsConfig(process.env),
 } as const;

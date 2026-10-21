@@ -11,7 +11,7 @@ import { createAdminInviteSchema } from '../validation';
  * The raw token is returned in this response **once** — only its hash is
  * stored, so it can't be fetched again — and is never logged. The inviting
  * admin is responsible for passing the link to the invitee out of band;
- * there is no email provider yet (Phase 6, issue #17).
+ * the auth-specific email sender is not wired to the notification providers yet.
  */
 export async function createInvite(req: Request, res: Response) {
   if (!req.user) throw new HttpError(401, 'Authentication required.');
