@@ -17,7 +17,7 @@ import { registerPatientExportSections } from './export-sections';
 import { auditRouter, adminAuditRouter, patientAuditRouter } from './modules/audit/routes';
 import { escrowEventsRouter } from './modules/payments/routes/escrow-events';
 import { requestId } from './middleware/request-id';
-import { notificationsRouter } from './modules/notifications/routes';
+import { notificationWebhooksRouter, notificationsRouter } from './modules/notifications/routes';
 import { referralsRouter } from './modules/referrals/routes';
 import { registerRetentionHolds } from './retention-holds';
 
@@ -43,6 +43,7 @@ export function createApp() {
   // (`req.log`) so every log line in a request can be greped by that id.
   app.use(requestId);
   app.use(cors({ origin: config.corsOrigins, credentials: true }));
+  app.use('/notifications/webhooks', notificationWebhooksRouter);
   app.use(express.json());
   app.use(cookieParser());
 

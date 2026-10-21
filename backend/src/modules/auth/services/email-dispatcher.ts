@@ -1,8 +1,8 @@
 // Provider-agnostic outbound email seam (ARCHITECTURE.md §2: email/SMS is
 // "third-party, behind an interface — never build custom").
 //
-// No provider is integrated yet — choosing one is Phase 6, tracked as
-// issue #17, and is deliberately not decided here. Until then the default
+// Notification providers are selected in Phase 6, issue #17, but this
+// auth-specific sender has not been wired to them. Until then the default
 // sender drops the message and logs only the *subject* and recipient:
 // never the body, because for verification mail the body contains the
 // one-time token (same rule the admin bootstrap CLI follows for
@@ -18,12 +18,12 @@ export type EmailSender = (message: EmailMessage) => Promise<void>;
 
 async function defaultEmailSender(message: EmailMessage): Promise<void> {
   // eslint-disable-next-line no-console
-  console.info(`[email] no provider configured yet (Phase 6 / issue #17) — "${message.subject}" to ${message.to} was not sent.`);
+  console.info(`[email] auth sender is not wired (Phase 6 / issue #34) — "${message.subject}" to ${message.to} was not sent.`);
 }
 
 let currentSender: EmailSender = defaultEmailSender;
 
-/** Swap the sender (tests; and the Phase 6 provider integration). */
+/** Swap the sender in tests; the auth-specific provider wiring remains pending. */
 export function setEmailSender(sender: EmailSender): void {
   currentSender = sender;
 }

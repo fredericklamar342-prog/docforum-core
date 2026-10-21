@@ -39,3 +39,30 @@ export async function markAllRead(req: Request, res: Response) {
 	const result = await notificationsService.markAllMyNotificationsRead(getUserId(req));
 	res.status(200).json({ updated: result.count });
 }
+
+export async function resendWebhook(req: Request, res: Response) {
+	if (!Buffer.isBuffer(req.body)) throw new HttpError(400, 'Invalid webhook payload.', 'INVALID_WEBHOOK_PAYLOAD');
+	await notificationsService.processResendWebhook({
+		rawBody: req.body.toString('utf8'),
+		id: req.header('svix-id') ?? '',
+		timestamp: req.header('svix-timestamp') ?? '',
+		signature: req.header('svix-signature') ?? '',
+	});
+	res.status(204).end();
+}
+
+export async function twilioStatusWebhook(req: Request, res: Response) {
+	await notificationsService.processTwilioStatusWebhook(req.body, req.header('x-twilio-signature'));
+	res.status(204).end();
+}
+
+export async function twilioInboundWebhook(req: Request, res: Response) {
+	const result = await notificationsService.processTwilioInboundWebhook(req.body, req.header('x-twilio-signature'));
+	const response =
+		result === 'stopped'
+			? 'DocForum SMS messages have been stopped.'
+			: result === 'started'
+				? 'DocForum SMS messages have been started.'
+				: '';
+	res.status(200).type('text/xml').send(response ? `<Response><Message>${response}</Message></Response>` : '<Response/>');
+}

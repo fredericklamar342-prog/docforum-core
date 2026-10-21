@@ -16,12 +16,12 @@ node backend/scripts/mark-email-verified.mjs      # prompts for the email
 ```
 
 Needs `DATABASE_URL` (it reads `backend/.env` via `dotenv/config`, so run it
-from `backend/`, or export the URL). Why it exists: no email provider is
-integrated yet (Phase 6, issue #17), so `POST /auth/signup` accounts on the
-hosted preview can't complete the verification link flow at all. This is the
-documented operator path until a provider lands — it needs database
-credentials, which is the same access a manual SQL `UPDATE` would require.
-Delete it when issue #17 lands.
+from `backend/`, or export the URL). Why it exists: the notification email
+provider (Phase 6, issue #17) is not wired into the separate auth verification
+sender, so `POST /auth/signup` accounts on the hosted preview can't complete
+the verification link flow automatically. This remains the documented
+operator path until the auth sender is wired — it needs database credentials,
+which is the same access a manual SQL `UPDATE` would require.
 
 ## `backend/scripts/gen-platform-identities.mjs`
 

@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../db/prisma-client';
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
@@ -52,4 +52,53 @@ export function markAllNotificationsRead(userId: string) {
 		where: { userId, readAt: null },
 		data: { readAt: new Date() },
 	});
+}
+
+export function upsertNotificationDelivery(input: {
+	notificationId: string;
+	channel: 'email' | 'sms';
+	provider: string;
+	providerMessageId?: string | null;
+	status: 'queued' | 'sent' | 'delivered' | 'failed' | 'bounced' | 'complained' | 'skipped';
+	errorCode?: string | null;
+}) {
+	return prisma.notificationDelivery.upsert({
+		where: { notificationId_channel: { notificationId: input.notificationId, channel: input.channel } },
+		create: input,
+		update: {
+			provider: input.provider,
+			providerMessageId: input.providerMessageId,
+			status: input.status,
+			errorCode: input.errorCode,
+		},
+	});
+}
+
+export function updateDeliveryStatus(
+	channel: 'email' | 'sms',
+	providerMessageId: string,
+	status: 'sent' | 'delivered' | 'failed' | 'bounced' | 'complained',
+): Promise<boolean> {
+	return prisma.notificationDelivery.updateMany({
+		where: { channel, providerMessageId, status: { in: ['queued', 'sent'] } },
+		data: { status },
+	}).then(async ({ count }) => {
+		if (count > 0) return true;
+		return Boolean(await prisma.notificationDelivery.findFirst({
+			where: { channel, providerMessageId },
+			select: { id: true },
+		}));
+	});
+}
+
+export async function reserveSmsSend(userId: string, day: Date, dailyCap: number): Promise<boolean> {
+	const reserved = await prisma.$queryRaw<Array<{ userId: string }>>(Prisma.sql`
+		INSERT INTO "SmsDailyQuota" ("userId", "day", "sendCount")
+		VALUES (${userId}, ${day}::date, 1)
+		ON CONFLICT ("userId", "day") DO UPDATE
+		SET "sendCount" = "SmsDailyQuota"."sendCount" + 1
+		WHERE "SmsDailyQuota"."sendCount" < ${dailyCap}
+		RETURNING "userId"
+	`);
+	return reserved.length === 1;
 }

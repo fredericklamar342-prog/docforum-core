@@ -54,8 +54,8 @@ export interface CreatedAdminInvite {
   expiresAt: Date;
   /**
    * The raw invite token, returned exactly once — only its hash is stored,
-   * so it can never be retrieved again. There is no email provider yet
-   * (issue #17), so the inviting admin has to pass the link on out of band;
+   * so it can never be retrieved again. The admin-invite email sender is
+   * not wired yet, so the inviting admin has to pass the link on out of band;
    * both are deliberately never written to a log.
    */
   token: string;
@@ -167,4 +167,16 @@ export async function reactivateUser(input: DeactivateInput): Promise<PublicUser
 
   const updated = await usersRepo.setUserReactivated(user.id, new Date());
   return toPublicUser(updated);
+}
+
+export function getNotificationContact(userId: string) {
+  return usersRepo.findNotificationContact(userId);
+}
+
+export function markEmailUndeliverable(email: string) {
+  return usersRepo.markEmailUndeliverable(email, new Date());
+}
+
+export function updateSmsConsent(phoneNumber: string, subscribed: boolean) {
+  return usersRepo.updateSmsConsent(phoneNumber, subscribed, new Date());
 }
